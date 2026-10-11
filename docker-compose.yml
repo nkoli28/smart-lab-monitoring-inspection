@@ -1,0 +1,35 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-smartlab}
+      POSTGRES_USER: ${POSTGRES_USER:-smartlab}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-for-local-use}
+    ports: ["5432:5432"]
+    volumes: ["postgres_data:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-smartlab} -d ${POSTGRES_DB:-smartlab}"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+  mosquitto:
+    image: eclipse-mosquitto:2
+    ports: ["1883:1883"]
+    volumes: ["./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro"]
+  api:
+    build: .
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-smartlab}:${POSTGRES_PASSWORD:-change-me-for-local-use}@db:5432/${POSTGRES_DB:-smartlab}
+      MQTT_HOST: mosquitto
+      MQTT_PORT: 1883
+      MQTT_TOPIC: lab/sensors/#
+      TEMP_THRESHOLD_C: ${TEMP_THRESHOLD_C:-32}
+      VIBRATION_THRESHOLD: ${VIBRATION_THRESHOLD:-0.8}
+      SIMULATOR_INTERVAL_SECONDS: ${SIMULATOR_INTERVAL_SECONDS:-3}
+    ports: ["8000:8000"]
+    depends_on:
+      db: {condition: service_healthy}
+      mosquitto: {condition: service_started}
+    restart: unless-stopped
+volumes:
+  postgres_data:
